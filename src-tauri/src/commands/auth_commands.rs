@@ -96,3 +96,14 @@ pub fn cmd_sessao_atual(
     let session = state.session.lock().map_err(|e| e.to_string())?;
     Ok(session.clone())
 }
+#[tauri::command]
+pub fn cmd_gerar_usuarios_para_funcionarios(
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+
+    match auth_service::gerar_usuarios_para_funcionarios(&conn) {
+        Ok(count) => Ok(format!("{} usuários criados com sucesso", count)),
+        Err(e) => Err(e.to_string()),
+    }
+}

@@ -141,6 +141,29 @@ export default function Usuarios() {
         >
           Novo Usuário
         </Button>
+<Button
+  color="green"
+  radius="md"
+  onClick={async () => {
+    try {
+      const resp = await invoke("cmd_gerar_usuarios_para_funcionarios");
+      notifications.show({
+        title: "Sucesso",
+        message: resp,
+        color: "green"
+      });
+      loadData();
+    } catch (error) {
+      notifications.show({
+        title: "Erro",
+        message: error.toString(),
+        color: "red"
+      });
+    }
+  }}
+>
+  Gerar usuários automaticamente
+</Button>
       </Group>
 
       <Paper withBorder p="md" radius="md" mt="md">

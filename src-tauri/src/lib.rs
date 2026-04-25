@@ -58,6 +58,7 @@ pub fn run() {
             cmd_resetar_senha,
             cmd_criar_usuario,
             cmd_listar_usuarios,
+            cmd_gerar_usuarios_para_funcionarios,   
             cmd_sessao_atual,
             // Embarcação
             criar_embarcacao,

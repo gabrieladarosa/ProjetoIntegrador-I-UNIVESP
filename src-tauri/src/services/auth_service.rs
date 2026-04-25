@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{Connection, params};
 
 use crate::auth::guard;
 use crate::auth::hasher;
@@ -280,4 +280,38 @@ mod tests {
         });
         assert!(matches!(result, Err(AppError::Forbidden(_))));
     }
+}
+pub fn gerar_usuarios_para_funcionarios(
+    conn: &Connection,
+) -> Result<i32, AppError> {
+    let mut stmt = conn.prepare("
+        SELECT f.id, f.nome
+        FROM funcionarios f
+        LEFT JOIN users u ON u.funcionario_id = f.id
+        WHERE u.id IS NULL
+    ")?;
+
+    let funcionarios = stmt.query_map([], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+    })?;
+
+    let mut count = 0;
+
+    for func in funcionarios {
+        let (id, _nome) = func?;
+
+        let login = format!("func{}", id);
+
+        // senha padrão simples (depois pode melhorar)
+        let senha_hash = hasher::hash_password("123456").unwrap();
+        conn.execute(
+            "INSERT INTO users (login, senha_hash, role, funcionario_id, ativo)
+             VALUES (?1, ?2, 'funcionario', ?3, 1)",
+            params![login, senha_hash, id],
+        )?;
+
+        count += 1;
+    }
+
+    Ok(count)
 }
