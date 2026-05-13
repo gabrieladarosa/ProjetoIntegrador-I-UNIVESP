@@ -141,7 +141,7 @@ export default function Usuarios() {
         >
           Novo Usuário
         </Button>
-<Button
+{/* <Button
   color="green"
   radius="md"
   onClick={async () => {
@@ -163,7 +163,7 @@ export default function Usuarios() {
   }}
 >
   Gerar usuários automaticamente
-</Button>
+</Button> */}
       </Group>
 
       <Paper withBorder p="md" radius="md" mt="md">

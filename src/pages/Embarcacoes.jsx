@@ -308,8 +308,8 @@ function Embarcacoes() {
               />
             </Group>
             <TextInput
-              label="Cliente Responsável"
-              placeholder="Nome do proprietário/responsável"
+              label="Funcionário Responsável"
+              placeholder="Nome do funcionário responsável"
               {...form.getInputProps("cliente_responsavel")}
             />
             {editando && (
