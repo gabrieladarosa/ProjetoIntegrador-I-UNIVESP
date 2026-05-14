@@ -47,6 +47,7 @@ pub struct Session {
     pub login: String,
     pub role: Role,
     pub primeiro_acesso: bool,
+    pub funcionario_id: Option<i64>,
 }
 
 /// DTO para login
@@ -89,4 +90,13 @@ pub struct CreateUserResponse {
 #[derive(Debug, Serialize)]
 pub struct ResetSenhaResponse {
     pub senha_temporaria: String,
+}
+
+/// DTO para atualização de usuário (admin only)
+#[derive(Debug, Deserialize)]
+pub struct UpdateUser {
+    pub id: i64,
+    pub login: String,
+    pub role: String,
+    pub funcionario_id: Option<i64>,
 }

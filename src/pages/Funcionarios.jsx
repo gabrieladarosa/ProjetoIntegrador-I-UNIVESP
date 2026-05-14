@@ -15,6 +15,8 @@ import {
   Loader,
   Center,
   Tooltip,
+  Divider,
+  CopyButton,
 } from "@mantine/core";
 import { useForm } from "@mantine/form";
 import { notifications } from "@mantine/notifications";
@@ -23,6 +25,8 @@ import {
   IconSearch,
   IconEdit,
   IconUsers,
+  IconLock,
+  IconCheck,
 } from "@tabler/icons-react";
 import { useTauriCommand } from "../hooks/useTauriCommand";
 import { useAuth } from "../contexts/AuthContext";
@@ -33,6 +37,7 @@ function Funcionarios() {
   const [modalAberto, setModalAberto] = useState(false);
   const [editando, setEditando] = useState(null);
   const [busca, setBusca] = useState("");
+  const [credenciais, setCredenciais] = useState(null);
   const { execute, loading } = useTauriCommand();
   const { isAdmin } = useAuth();
 
@@ -104,7 +109,7 @@ function Funcionarios() {
           color: "green",
         });
       } else {
-        await execute("criar_funcionario", {
+        const resp = await execute("criar_funcionario", {
           data: {
             nome: values.nome,
             cargo: values.cargo || null,
@@ -113,8 +118,14 @@ function Funcionarios() {
         });
         notifications.show({
           title: "Sucesso",
-          message: "Funcionário cadastrado",
+          message: "Funcionário cadastrado com usuário vinculado",
           color: "green",
+        });
+        // Mostrar credenciais do usuário auto-criado
+        setCredenciais({
+          nome: resp.funcionario.nome,
+          login: resp.login,
+          senha_temporaria: resp.senha_temporaria,
         });
       }
 
@@ -266,6 +277,55 @@ function Funcionarios() {
             </Group>
           </Stack>
         </form>
+      </Modal>
+
+      {/* Modal de Credenciais do Usuário */}
+      <Modal
+        opened={!!credenciais}
+        onClose={() => setCredenciais(null)}
+        title="Usuário Criado Automaticamente"
+        centered
+        radius="md"
+        padding="xl"
+      >
+        <Stack align="center" gap="xs">
+          <IconLock size={48} color="var(--mantine-color-blue-6)" />
+          <Text ta="center" size="sm" c="dimmed" mb="md">
+            Um usuário foi criado automaticamente para <b>{credenciais?.nome}</b>. Forneça as credenciais abaixo. A senha deverá ser alterada no primeiro acesso.
+          </Text>
+          <Paper withBorder p="md" w="100%" radius="md" style={{ backgroundColor: "var(--app-bg)" }}>
+            <Stack gap="xs">
+              <div>
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed">Login</Text>
+                <Group justify="space-between">
+                  <Text fw={600}>{credenciais?.login}</Text>
+                  <CopyButton value={credenciais?.login || ""}>
+                    {({ copied, copy }) => (
+                      <ActionIcon color={copied ? "teal" : "gray"} variant="light" size="sm" onClick={copy}>
+                        {copied ? <IconCheck size={14} /> : <IconEdit size={14} />}
+                      </ActionIcon>
+                    )}
+                  </CopyButton>
+                </Group>
+              </div>
+              <Divider />
+              <div>
+                <Text size="xs" fw={700} tt="uppercase" c="dimmed">Senha Temporária</Text>
+                <Group justify="space-between">
+                  <Text fw={700} size="xl" c="blue" style={{ letterSpacing: 2 }}>{credenciais?.senha_temporaria}</Text>
+                  <CopyButton value={credenciais?.senha_temporaria || ""}>
+                    {({ copied, copy }) => (
+                      <ActionIcon color={copied ? "teal" : "blue"} variant="light" onClick={copy}>
+                        {copied ? <IconCheck size={14} /> : <IconEdit size={14} />}
+                      </ActionIcon>
+                    )}
+                  </CopyButton>
+                </Group>
+              </div>
+            </Stack>
+          </Paper>
+          <Button fullWidth mt="xl" onClick={() => setCredenciais(null)} radius="md">Entendido</Button>
+        </Stack>
       </Modal>
     </>
   );

@@ -60,6 +60,9 @@ pub fn run() {
             cmd_listar_usuarios,
             cmd_gerar_usuarios_para_funcionarios,   
             cmd_sessao_atual,
+            cmd_ativar_desativar_usuario,
+            cmd_editar_usuario,
+            cmd_excluir_usuario,
             // Embarcação
             criar_embarcacao,
             atualizar_embarcacao,
@@ -73,7 +76,7 @@ pub fn run() {
             buscar_funcionarios,
             // Serviço
             criar_servico,
-            atualizar_status_servico,
+            atualizar_servico,
             listar_servicos,
             listar_servicos_por_embarcacao,
         ])

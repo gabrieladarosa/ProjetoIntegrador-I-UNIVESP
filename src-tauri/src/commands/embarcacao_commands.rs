@@ -40,9 +40,9 @@ pub fn listar_embarcacoes(
 ) -> Result<Vec<Embarcacao>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
-    let _session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    embarcacao_service::listar(&conn).map_err(|e| e.to_string())
+    embarcacao_service::listar(&conn, session).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -52,7 +52,7 @@ pub fn buscar_embarcacoes(
 ) -> Result<Vec<Embarcacao>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
-    let _session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    embarcacao_service::buscar(&conn, termo).map_err(|e| e.to_string())
+    embarcacao_service::buscar(&conn, session, termo).map_err(|e| e.to_string())
 }

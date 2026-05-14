@@ -3,7 +3,7 @@ use tauri::State;
 use crate::auth::guard;
 use crate::models::user::{
     CreateUser, CreateUserResponse, LoginRequest, LoginResponse,
-    ResetSenhaResponse, Session, TrocarSenhaRequest, User,
+    ResetSenhaResponse, Session, TrocarSenhaRequest, User, UpdateUser,
 };
 use crate::services::auth_service;
 use crate::state::AppState;
@@ -96,6 +96,43 @@ pub fn cmd_sessao_atual(
     let session = state.session.lock().map_err(|e| e.to_string())?;
     Ok(session.clone())
 }
+#[tauri::command]
+pub fn cmd_ativar_desativar_usuario(
+    state: State<'_, AppState>,
+    user_id: i64,
+    ativo: bool,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let session_lock = state.session.lock().map_err(|e| e.to_string())?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+
+    auth_service::ativar_desativar_usuario(&conn, session, user_id, ativo).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn cmd_editar_usuario(
+    state: tauri::State<'_, AppState>,
+    data: UpdateUser,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let session_lock = state.session.lock().map_err(|e| e.to_string())?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+
+    auth_service::editar_usuario(&conn, session, data).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn cmd_excluir_usuario(
+    state: tauri::State<'_, AppState>,
+    user_id: i64,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let session_lock = state.session.lock().map_err(|e| e.to_string())?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+
+    auth_service::excluir_usuario(&conn, session, user_id).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn cmd_gerar_usuarios_para_funcionarios(
     state: State<'_, AppState>,

@@ -21,6 +21,7 @@ import {
   IconAlertCircle,
 } from "@tabler/icons-react";
 import { useTauriCommand } from "../hooks/useTauriCommand";
+import { useAuth } from "../contexts/AuthContext";
 import "dayjs/locale/pt-br";
 
 const servicoOptions = [
@@ -44,11 +45,12 @@ function RegistrarServico() {
   const [funcionarios, setFuncionarios] = useState([]);
   const [sucesso, setSucesso] = useState(false);
   const { execute, loading } = useTauriCommand();
+  const { isAdmin, funcionarioId } = useAuth();
 
   const form = useForm({
     initialValues: {
       embarcacao_id: null,
-      funcionario_id: null,
+      funcionario_id: isAdmin ? null : String(funcionarioId),
       descricao: [],
       data_execucao: new Date(),
       observacao: "",
@@ -70,6 +72,11 @@ function RegistrarServico() {
         ]);
         setEmbarcacoes(embs);
         setFuncionarios(funcs);
+        
+        // Se for funcionário, o id já está no initialValues, mas se carregar depois:
+        if (!isAdmin && funcionarioId) {
+          form.setFieldValue("funcionario_id", String(funcionarioId));
+        }
       } catch (err) {
         notifications.show({
           title: "Erro ao carregar dados",
@@ -79,11 +86,10 @@ function RegistrarServico() {
       }
     };
     carregarDados();
-  }, [execute]);
+  }, [execute, isAdmin, funcionarioId]);
 
   const salvar = async (values) => {
     try {
-      // Formatar data para string
       const dataStr = values.data_execucao
         ? values.data_execucao.toISOString().split("T")[0]
         : "";
@@ -100,12 +106,17 @@ function RegistrarServico() {
 
       notifications.show({
         title: "Serviço registrado",
-        message: "O serviço foi registrado com sucesso",
+        message: "O serviço foi registrado e está 'Em Execução'",
         color: "green",
         icon: <IconCheck size={16} />,
       });
 
       form.reset();
+      // Re-setar o funcionário id se não for admin
+      if (!isAdmin && funcionarioId) {
+        form.setFieldValue("funcionario_id", String(funcionarioId));
+      }
+      
       setSucesso(true);
       setTimeout(() => setSucesso(false), 5000);
     } catch (err) {
@@ -143,19 +154,20 @@ function RegistrarServico() {
           withCloseButton
           onClose={() => setSucesso(false)}
         >
-          O serviço foi registrado e já está disponível no histórico.
+          O serviço foi iniciado e já está disponível no histórico.
         </Alert>
       )}
 
-      {embarcacoes.length === 0 || funcionarios.length === 0 ? (
+      {embarcacoes.length === 0 || (isAdmin && funcionarios.length === 0) ? (
         <Alert
           icon={<IconAlertCircle size={16} />}
           title="Cadastros necessários"
           color="yellow"
         >
           <Text size="sm">
-            Para registrar um serviço, é necessário ter pelo menos uma embarcação
-            e um funcionário ativo cadastrados.
+            {isAdmin 
+              ? "Para registrar um serviço, é necessário ter pelo menos uma embarcação e um funcionário ativo cadastrados."
+              : "Você não possui embarcações vinculadas ou não há funcionários ativos."}
           </Text>
         </Alert>
       ) : (
@@ -168,7 +180,7 @@ function RegistrarServico() {
                 data={embarcacaoOptions}
                 searchable
                 required
-                nothingFoundMessage="Nenhuma embarcação encontrada"
+                nothingFoundMessage="Nenhuma embarcação vinculada encontrada"
                 {...form.getInputProps("embarcacao_id")}
               />
 
@@ -178,6 +190,7 @@ function RegistrarServico() {
                 data={funcionarioOptions}
                 searchable
                 required
+                disabled={!isAdmin}
                 nothingFoundMessage="Nenhum funcionário ativo encontrado"
                 {...form.getInputProps("funcionario_id")}
               />
@@ -186,6 +199,7 @@ function RegistrarServico() {
                 label="Data de Execução"
                 placeholder="Selecione a data"
                 required
+                disabled={!isAdmin}
                 locale="pt-br"
                 valueFormat="DD/MM/YYYY"
                 {...form.getInputProps("data_execucao")}
@@ -222,12 +236,17 @@ function RegistrarServico() {
               <Group justify="flex-end" mt="md">
                 <Button
                   variant="default"
-                  onClick={() => form.reset()}
+                  onClick={() => {
+                    form.reset();
+                    if (!isAdmin && funcionarioId) {
+                      form.setFieldValue("funcionario_id", String(funcionarioId));
+                    }
+                  }}
                 >
                   Limpar
                 </Button>
                 <Button type="submit" loading={loading}>
-                  Registrar Serviço
+                  Registrar e Iniciar Serviço
                 </Button>
               </Group>
             </Stack>

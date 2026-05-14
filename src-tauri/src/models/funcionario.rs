@@ -28,3 +28,11 @@ pub struct UpdateFuncionario {
     pub telefone: Option<String>,
     pub ativo: bool,
 }
+
+/// Resposta ao criar funcionário — inclui credenciais do usuário auto-criado
+#[derive(Debug, Serialize)]
+pub struct CreateFuncionarioResponse {
+    pub funcionario: Funcionario,
+    pub login: String,
+    pub senha_temporaria: String,
+}

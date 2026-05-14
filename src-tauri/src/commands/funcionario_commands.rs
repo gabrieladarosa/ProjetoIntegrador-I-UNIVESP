@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::state::AppState;
-use crate::models::funcionario::{CreateFuncionario, Funcionario, UpdateFuncionario};
+use crate::models::funcionario::{CreateFuncionario, CreateFuncionarioResponse, Funcionario, UpdateFuncionario};
 use crate::services::funcionario_service;
 use crate::auth::guard;
 
@@ -9,7 +9,7 @@ use crate::auth::guard;
 pub fn criar_funcionario(
     state: State<'_, AppState>,
     data: CreateFuncionario,
-) -> Result<Funcionario, String> {
+) -> Result<CreateFuncionarioResponse, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
     let session = guard::require_authenticated(&session_lock).map_err(String::from)?;

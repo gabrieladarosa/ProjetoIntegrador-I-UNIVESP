@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// Entidade Serviço — registro operacional principal
+/// Entidade Serviço — registro de atividades realizadas
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Servico {
     pub id: i64,
@@ -12,13 +12,16 @@ pub struct Servico {
     pub observacao: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+    // Campos de auditoria
+    pub created_by_user_id: Option<i64>,
+    pub updated_by_user_id: Option<i64>,
     // Campos joined para exibição
     pub embarcacao_nome: Option<String>,
     pub funcionario_nome: Option<String>,
 }
 
 /// DTO para criação de serviço
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CreateServico {
     pub embarcacao_id: i64,
     pub funcionario_id: i64,
@@ -27,10 +30,13 @@ pub struct CreateServico {
     pub observacao: Option<String>,
 }
 
-/// DTO para atualização de status do serviço
-#[derive(Debug, Deserialize)]
-pub struct UpdateServicoStatus {
+/// DTO para atualização de serviço (campos opcionais)
+#[derive(Debug, Deserialize, Serialize, Clone)]
+pub struct UpdateServico {
     pub id: i64,
-    pub status: String,
+    pub descricao: Option<String>,
+    pub data_execucao: Option<String>,
+    pub status: Option<String>,
     pub observacao: Option<String>,
+    pub funcionario_id: Option<i64>,
 }

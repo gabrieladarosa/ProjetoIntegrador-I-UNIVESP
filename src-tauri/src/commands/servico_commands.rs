@@ -1,7 +1,7 @@
 use tauri::State;
 
 use crate::state::AppState;
-use crate::models::servico::{CreateServico, Servico, UpdateServicoStatus};
+use crate::models::servico::{CreateServico, Servico, UpdateServico};
 use crate::services::servico_service;
 use crate::auth::guard;
 
@@ -12,21 +12,21 @@ pub fn criar_servico(
 ) -> Result<Servico, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
-    let _session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    servico_service::criar(&conn, data).map_err(|e| e.to_string())
+    servico_service::criar(&conn, session, data).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn atualizar_status_servico(
+pub fn atualizar_servico(
     state: State<'_, AppState>,
-    data: UpdateServicoStatus,
+    data: UpdateServico,
 ) -> Result<Servico, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
     let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    servico_service::atualizar_status(&conn, session, data).map_err(|e| e.to_string())
+    servico_service::atualizar(&conn, session, data).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -35,9 +35,9 @@ pub fn listar_servicos(
 ) -> Result<Vec<Servico>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
-    let _session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    servico_service::listar_todos(&conn).map_err(|e| e.to_string())
+    servico_service::listar(&conn, session).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -47,7 +47,7 @@ pub fn listar_servicos_por_embarcacao(
 ) -> Result<Vec<Servico>, String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let session_lock = state.session.lock().map_err(|e| e.to_string())?;
-    let _session = guard::require_authenticated(&session_lock).map_err(String::from)?;
+    let session = guard::require_authenticated(&session_lock).map_err(String::from)?;
 
-    servico_service::listar_por_embarcacao(&conn, embarcacao_id).map_err(|e| e.to_string())
+    servico_service::listar_por_embarcacao(&conn, session, embarcacao_id).map_err(|e| e.to_string())
 }

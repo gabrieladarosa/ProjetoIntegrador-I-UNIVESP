@@ -5,7 +5,7 @@ use crate::auth::hasher;
 use crate::error::AppError;
 use crate::models::user::{
     CreateUser, CreateUserResponse, LoginRequest, LoginResponse,
-    ResetSenhaResponse, Role, Session, TrocarSenhaRequest, User,
+    ResetSenhaResponse, Role, Session, TrocarSenhaRequest, User, UpdateUser,
 };
 use crate::repositories::user_repository;
 
@@ -38,12 +38,30 @@ pub fn login(conn: &Connection, data: LoginRequest) -> Result<LoginResponse, App
         login: user.login,
         role,
         primeiro_acesso: user.primeiro_acesso,
+        funcionario_id: user.funcionario_id,
     };
 
     Ok(LoginResponse {
         primeiro_acesso: user.primeiro_acesso,
         session,
     })
+}
+
+/// Ativar ou desativar um usuário — somente admin
+pub fn ativar_desativar_usuario(
+    conn: &Connection,
+    session: &Session,
+    user_id: i64,
+    ativo: bool,
+) -> Result<(), AppError> {
+    guard::require_admin(session)?;
+
+    // Não permitir desativar a si mesmo
+    if session.user_id == user_id && !ativo {
+        return Err(AppError::Validation("Você não pode desativar seu próprio usuário".into()));
+    }
+
+    user_repository::update_ativo(conn, user_id, ativo)
 }
 
 /// Troca de senha — valida senha atual, hash nova, marca primeiro_acesso=0
@@ -157,6 +175,46 @@ pub fn listar_usuarios(
 ) -> Result<Vec<User>, AppError> {
     guard::require_admin(session)?;
     user_repository::list(conn)
+}
+
+/// Editar um usuário — somente admin
+pub fn editar_usuario(
+    conn: &Connection,
+    session: &Session,
+    data: UpdateUser,
+) -> Result<(), AppError> {
+    guard::require_admin(session)?;
+
+    // Validar role
+    let _ = Role::from_str(&data.role)
+        .map_err(|_| AppError::Validation("Role deve ser 'admin' ou 'funcionario'".into()))?;
+
+    // Verificar se o novo login já existe (se foi alterado)
+    let user_atual = user_repository::find_by_id(conn, data.id)?;
+    if user_atual.login != data.login && user_repository::login_exists(conn, &data.login)? {
+        return Err(AppError::Validation(format!("Login '{}' já está em uso", data.login)));
+    }
+
+    user_repository::update(conn, data.id, &data.login, &data.role, data.funcionario_id)
+}
+
+/// Excluir um usuário — somente admin
+pub fn excluir_usuario(
+    conn: &Connection,
+    session: &Session,
+    user_id: i64,
+) -> Result<(), AppError> {
+    guard::require_admin(session)?;
+
+    // Não permitir excluir a si mesmo
+    if session.user_id == user_id {
+        return Err(AppError::Validation("Você não pode excluir seu próprio usuário".into()));
+    }
+
+    // Nota: Em um sistema real, poderíamos verificar se há registros vinculados
+    // (ex: serviços criados por este usuário) antes de permitir a exclusão física.
+    
+    user_repository::delete(conn, user_id)
 }
 
 #[cfg(test)]

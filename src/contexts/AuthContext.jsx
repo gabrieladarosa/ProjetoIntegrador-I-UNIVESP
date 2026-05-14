@@ -80,6 +80,7 @@ export function AuthProvider({ children }) {
     isAuthenticated: !!user,
     isFirstAccess: user?.primeiro_acesso || false,
     isAdmin: user?.role === "Admin",
+    funcionarioId: user?.funcionario_id || null,
     login,
     logout,
     trocarSenha,

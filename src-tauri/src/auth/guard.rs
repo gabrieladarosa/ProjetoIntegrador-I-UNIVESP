@@ -37,6 +37,7 @@ mod tests {
             login: "admin".into(),
             role: Role::Admin,
             primeiro_acesso: false,
+            funcionario_id: None,
         }
     }
 
@@ -46,6 +47,7 @@ mod tests {
             login: "joao".into(),
             role: Role::Funcionario,
             primeiro_acesso: false,
+            funcionario_id: Some(10),
         }
     }
 

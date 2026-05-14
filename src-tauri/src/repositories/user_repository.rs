@@ -133,6 +133,20 @@ pub fn list(conn: &Connection) -> Result<Vec<User>, AppError> {
     Ok(users)
 }
 
+/// Atualiza o status ativo/inativo do usuário
+pub fn update_ativo(conn: &Connection, id: i64, ativo: bool) -> Result<(), AppError> {
+    let rows = conn.execute(
+        "UPDATE users SET ativo = ?1 WHERE id = ?2",
+        params![ativo, id],
+    )?;
+
+    if rows == 0 {
+        return Err(AppError::NotFound("Usuário não encontrado".into()));
+    }
+
+    Ok(())
+}
+
 /// Verifica se já existe um usuário com o login informado
 pub fn login_exists(conn: &Connection, login: &str) -> Result<bool, AppError> {
     let count: i64 = conn.query_row(
@@ -141,4 +155,33 @@ pub fn login_exists(conn: &Connection, login: &str) -> Result<bool, AppError> {
         |row| row.get(0),
     )?;
     Ok(count > 0)
+}
+
+pub fn update(
+    conn: &Connection,
+    id: i64,
+    login: &str,
+    role: &str,
+    funcionario_id: Option<i64>,
+) -> Result<(), AppError> {
+    let rows = conn.execute(
+        "UPDATE users SET login = ?1, role = ?2, funcionario_id = ?3 WHERE id = ?4",
+        params![login, role, funcionario_id, id],
+    )?;
+
+    if rows == 0 {
+        return Err(AppError::NotFound("Usuário não encontrado".into()));
+    }
+
+    Ok(())
+}
+
+pub fn delete(conn: &Connection, id: i64) -> Result<(), AppError> {
+    let rows = conn.execute("DELETE FROM users WHERE id = ?1", params![id])?;
+
+    if rows == 0 {
+        return Err(AppError::NotFound("Usuário não encontrado".into()));
+    }
+
+    Ok(())
 }

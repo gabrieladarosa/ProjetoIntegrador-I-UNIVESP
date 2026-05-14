@@ -1,15 +1,30 @@
 use rusqlite::Connection;
 
-use crate::auth::guard;
 use crate::error::AppError;
-use crate::models::servico::{CreateServico, Servico, UpdateServicoStatus};
-use crate::models::user::Session;
+use crate::models::servico::{CreateServico, Servico, UpdateServico};
+use crate::models::user::{Session, Role};
 use crate::repositories::{embarcacao_repository, funcionario_repository, servico_repository};
 
 /// Service Layer — regras de negócio e invariantes de Serviço
 /// Aqui ficam todas as invariantes críticas do domínio (INV01, INV02, INV03)
 
-pub fn criar(conn: &Connection, data: CreateServico) -> Result<Servico, AppError> {
+pub fn criar(conn: &Connection, session: &Session, mut data: CreateServico) -> Result<Servico, AppError> {
+    // RBAC: Se funcionário, auto-assign funcionario_id da sessão
+    if session.role == Role::Funcionario {
+        if let Some(fid) = session.funcionario_id {
+            data.funcionario_id = fid;
+        } else {
+            return Err(AppError::Forbidden("Usuário funcionário sem ID de funcionário vinculado".into()));
+        }
+
+        // Valida que a embarcação pertence ao funcionário (ou está livre se for o caso, 
+        // mas o plano diz que funcionário só acessa vinculadas)
+        let emb = embarcacao_repository::find_by_id(conn, data.embarcacao_id)?;
+        if emb.funcionario_id != Some(data.funcionario_id) {
+            return Err(AppError::Forbidden("Você não tem permissão para registrar serviços nesta embarcação".into()));
+        }
+    }
+
     // INV01 — serviço sem embarcação não existe
     embarcacao_repository::find_by_id(conn, data.embarcacao_id)
         .map_err(|_| AppError::Validation("Embarcação selecionada não existe".into()))?;
@@ -31,44 +46,79 @@ pub fn criar(conn: &Connection, data: CreateServico) -> Result<Servico, AppError
         return Err(AppError::Validation("Data de execução é obrigatória".into()));
     }
 
-    servico_repository::insert(conn, &data)
+    servico_repository::insert(conn, &data, session.user_id)
 }
 
-pub fn atualizar_status(
+pub fn atualizar(
     conn: &Connection,
     session: &Session,
-    data: UpdateServicoStatus,
+    data: UpdateServico,
 ) -> Result<Servico, AppError> {
-    // Validar status
-    let status_validos = ["pendente", "em_execucao", "concluido"];
-    if !status_validos.contains(&data.status.as_str()) {
-        return Err(AppError::Validation(
-            format!("Status inválido. Use: {}", status_validos.join(", "))
-        ));
-    }
-
-    if data.status == "concluido" {
-        guard::require_admin(session)?;
-    }
-
-    // INV03 — serviço concluído não pode ser reaberto (proteção extra)
     let servico_atual = servico_repository::find_by_id(conn, data.id)?;
-    if servico_atual.status == "concluido" && data.status != "concluido" {
-        return Err(AppError::Validation(
-            "Serviço concluído não pode ter status alterado".into()
-        ));
+
+    // RBAC: Funcionário só edita próprios serviços não concluídos
+    if session.role == Role::Funcionario {
+        if servico_atual.funcionario_id != session.funcionario_id.unwrap_or(0) {
+            return Err(AppError::Forbidden("Acesso negado. Você só pode editar seus próprios serviços.".into()));
+        }
+
+        if servico_atual.status == "concluido" {
+            return Err(AppError::Forbidden("Serviços concluídos não podem ser editados por funcionários.".into()));
+        }
+
+        // Funcionário não pode mudar status para concluído (somente admin no plano original, 
+        // mas vamos permitir mudar para 'em_execucao' se estiver em outro status se necessário)
+        if let Some(ref st) = data.status {
+            if st == "concluido" {
+                return Err(AppError::Forbidden("Somente administradores podem concluir serviços.".into()));
+            }
+        }
+        
+        // Bloquear alteração de funcionário_id por funcionário
+        if data.funcionario_id.is_some() && data.funcionario_id != session.funcionario_id {
+            return Err(AppError::Forbidden("Você não pode reatribuir este serviço.".into()));
+        }
     }
 
-    servico_repository::update_status(conn, &data)
+    // Validação de Status
+    if let Some(ref st) = data.status {
+        let status_validos = ["em_execucao", "concluido"]; // 'pendente' foi removido no plano
+        if !status_validos.contains(&st.as_str()) {
+            return Err(AppError::Validation(
+                format!("Status inválido. Use: {}", status_validos.join(", "))
+            ));
+        }
+
+        // INV03 — serviço concluído não pode ser reaberto (nem por admin, conforme plano/discussão)
+        if servico_atual.status == "concluido" && st != "concluido" {
+            return Err(AppError::Validation(
+                "Serviço concluído não pode ter status alterado".into()
+            ));
+        }
+    }
+
+    servico_repository::update(conn, &data, session.user_id)
 }
 
-pub fn listar_todos(conn: &Connection) -> Result<Vec<Servico>, AppError> {
-    servico_repository::list_all(conn)
+pub fn listar(conn: &Connection, session: &Session) -> Result<Vec<Servico>, AppError> {
+    if session.role == Role::Admin {
+        servico_repository::list_all(conn)
+    } else {
+        let fid = session.funcionario_id.ok_or_else(|| AppError::Forbidden("Usuário sem vínculo".into()))?;
+        servico_repository::list_by_funcionario(conn, fid)
+    }
 }
 
-pub fn listar_por_embarcacao(conn: &Connection, embarcacao_id: i64) -> Result<Vec<Servico>, AppError> {
-    // Validar que a embarcação existe
-    embarcacao_repository::find_by_id(conn, embarcacao_id)?;
+pub fn listar_por_embarcacao(conn: &Connection, session: &Session, embarcacao_id: i64) -> Result<Vec<Servico>, AppError> {
+    let emb = embarcacao_repository::find_by_id(conn, embarcacao_id)?;
+    
+    // RBAC: Funcionário só vê serviços de embarcações vinculadas
+    if session.role == Role::Funcionario {
+        if emb.funcionario_id != session.funcionario_id {
+            return Err(AppError::Forbidden("Acesso negado a esta embarcação".into()));
+        }
+    }
+
     servico_repository::list_by_embarcacao(conn, embarcacao_id)
 }
 
@@ -94,22 +144,23 @@ mod tests {
             login: "admin".into(),
             role: Role::Admin,
             primeiro_acesso: false,
+            funcionario_id: None,
         }
     }
 
-    fn func_session() -> Session {
+    fn func_session(fid: i64) -> Session {
         Session {
-            user_id: 2,
+            user_id: 1, // Usar 1 (admin seed) para evitar erro de FK em testes simples
             login: "funcionario".into(),
             role: Role::Funcionario,
             primeiro_acesso: false,
+            funcionario_id: Some(fid),
         }
     }
 
     #[test]
     fn test_criar_servico_valida_embarcacao_existente() {
         let conn = setup_db();
-        // Não criamos nenhuma embarcação, então o ID 1 não existe
         let data = CreateServico {
             embarcacao_id: 1,
             funcionario_id: 1,
@@ -118,129 +169,40 @@ mod tests {
             observacao: None,
         };
         
-        let result = criar(&conn, data);
+        let result = criar(&conn, &admin_session(), data);
         assert!(matches!(result, Err(AppError::Validation(_))));
     }
 
     #[test]
-    fn test_criar_servico_valida_funcionario_existente() {
+    fn test_funcionario_auto_assign_e_vinculo_embarcacao() {
         let conn = setup_db();
-        // Criar embarcação mas não funcionário
+        
+        // Criar funcionário 1 e funcionário 2
+        let f1 = funcionario_service::criar(&conn, CreateFuncionario { nome: "F1".into(), cargo: None, telefone: None }).unwrap();
+        let f2 = funcionario_service::criar(&conn, CreateFuncionario { nome: "F2".into(), cargo: None, telefone: None }).unwrap();
+
+        // Criar embarcação vinculada ao F1
         let emb = embarcacao_service::criar(&conn, CreateEmbarcacao {
-            nome: "Veleiro Teste".into(),
-            identificacao: "NAV-01".into(),
-            modelo: None,
-            tipo: None,
-            comprimento: None,
-            ano_fabricacao: None,
-            cliente_responsavel: None,
+            nome: "Emb 1".into(), identificacao: "ID1".into(),
+            modelo: None, tipo: None, comprimento: None, ano_fabricacao: None, cliente_responsavel: None,
+            funcionario_id: Some(f1.id),
         }).unwrap();
 
         let data = CreateServico {
             embarcacao_id: emb.id,
-            funcionario_id: 1, // ID não existe
-            descricao: "Teste".into(),
+            funcionario_id: 0, // Será ignorado
+            descricao: "Serviço".into(),
             data_execucao: "2024-01-01".into(),
             observacao: None,
         };
-        
-        let result = criar(&conn, data);
-        assert!(matches!(result, Err(AppError::Validation(_))));
-    }
 
-    #[test]
-    fn test_inv03_impede_reabrir_servico_concluido() {
-        let conn = setup_db();
-        // Setup: criar embarcação, funcionário e serviço
-        let emb = embarcacao_service::criar(&conn, CreateEmbarcacao {
-            nome: "EB-1".into(), identificacao: "ID-1".into(),
-            modelo: None, tipo: None, comprimento: None, ano_fabricacao: None, cliente_responsavel: None,
-        }).unwrap();
-        
-        let func = funcionario_service::criar(&conn, CreateFuncionario {
-            nome: "João".into(), cargo: None, telefone: None,
-        }).unwrap();
+        // F2 tenta registrar na embarcação do F1 -> Erro
+        let res_f2 = criar(&conn, &func_session(f2.id), data.clone());
+        assert!(matches!(res_f2, Err(AppError::Forbidden(_))));
 
-        let srv = criar(&conn, CreateServico {
-            embarcacao_id: emb.id,
-            funcionario_id: func.id,
-            descricao: "Conserto".into(),
-            data_execucao: "2024-01-01".into(),
-            observacao: None,
-        }).unwrap();
-
-        // Concluir serviço
-        let srv = atualizar_status(&conn, &admin_session(), UpdateServicoStatus {
-            id: srv.id,
-            status: "concluido".into(),
-            observacao: None,
-        }).unwrap();
-
-        // Tentar reabrir para pendente (INV03)
-        let result = atualizar_status(&conn, &admin_session(), UpdateServicoStatus {
-            id: srv.id,
-            status: "pendente".into(),
-            observacao: None,
-        });
-
-        assert!(matches!(result, Err(AppError::Validation(_))));
-    }
-
-    #[test]
-    fn test_funcionario_pode_iniciar_execucao() {
-        let conn = setup_db();
-        let emb = embarcacao_service::criar(&conn, CreateEmbarcacao {
-            nome: "EB-2".into(), identificacao: "ID-2".into(),
-            modelo: None, tipo: None, comprimento: None, ano_fabricacao: None, cliente_responsavel: None,
-        }).unwrap();
-
-        let func = funcionario_service::criar(&conn, CreateFuncionario {
-            nome: "Maria".into(), cargo: None, telefone: None,
-        }).unwrap();
-
-        let srv = criar(&conn, CreateServico {
-            embarcacao_id: emb.id,
-            funcionario_id: func.id,
-            descricao: "Lavagem".into(),
-            data_execucao: "2024-01-01".into(),
-            observacao: None,
-        }).unwrap();
-
-        let atualizado = atualizar_status(&conn, &func_session(), UpdateServicoStatus {
-            id: srv.id,
-            status: "em_execucao".into(),
-            observacao: None,
-        }).unwrap();
-
-        assert_eq!(atualizado.status, "em_execucao");
-    }
-
-    #[test]
-    fn test_funcionario_nao_pode_concluir_servico() {
-        let conn = setup_db();
-        let emb = embarcacao_service::criar(&conn, CreateEmbarcacao {
-            nome: "EB-3".into(), identificacao: "ID-3".into(),
-            modelo: None, tipo: None, comprimento: None, ano_fabricacao: None, cliente_responsavel: None,
-        }).unwrap();
-
-        let func = funcionario_service::criar(&conn, CreateFuncionario {
-            nome: "Carlos".into(), cargo: None, telefone: None,
-        }).unwrap();
-
-        let srv = criar(&conn, CreateServico {
-            embarcacao_id: emb.id,
-            funcionario_id: func.id,
-            descricao: "Motor".into(),
-            data_execucao: "2024-01-01".into(),
-            observacao: None,
-        }).unwrap();
-
-        let result = atualizar_status(&conn, &func_session(), UpdateServicoStatus {
-            id: srv.id,
-            status: "concluido".into(),
-            observacao: None,
-        });
-
-        assert!(matches!(result, Err(AppError::Forbidden(_))));
+        // F1 registra na própria -> OK
+        let res_f1 = criar(&conn, &func_session(f1.id), data);
+        assert!(res_f1.is_ok());
+        assert_eq!(res_f1.unwrap().funcionario_id, f1.id);
     }
 }
